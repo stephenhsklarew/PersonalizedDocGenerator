@@ -38,12 +38,14 @@ AI-powered CLI tool that generates draft documents based on your writing style, 
 
 ## Usage
 
-### Basic Usage
+The tool supports two modes: **Interactive Mode** and **Command-Line Mode**.
 
-Run the interactive CLI:
+### Interactive Mode
+
+Run the interactive CLI for step-by-step guidance:
 
 ```bash
-python document_generator.py
+python3 document_generator.py
 ```
 
 or make it executable:
@@ -53,7 +55,55 @@ chmod +x document_generator.py
 ./document_generator.py
 ```
 
-### Interactive Prompts
+### Command-Line Mode
+
+Use command-line arguments for automation and scripting:
+
+```bash
+python3 document_generator.py \
+  --topic "examples/sample_topic.txt" \
+  --style "examples/sample_writing_style.txt" \
+  --audience "business leaders" \
+  --type "whitepaper" \
+  --size "3 pages" \
+  --output "./output"
+```
+
+**Available Arguments:**
+- `-t, --topic` - Topic content (file path or direct text) - **Required for CLI mode**
+- `-s, --style` - Writing style (file path or direct text) - Optional
+- `-a, --audience` - Target audience (e.g., 'business leaders')
+- `--type` - Output type (e.g., 'blog post', 'whitepaper')
+- `--size` - Document size (e.g., '3 pages', '1000 words')
+- `-o, --output` - Output directory
+
+**Examples:**
+
+With files:
+```bash
+python3 document_generator.py \
+  --topic examples/sample_topic.txt \
+  --style examples/sample_writing_style.txt \
+  --audience "healthcare executives" \
+  --type "executive summary" \
+  --size "2 pages"
+```
+
+With direct text:
+```bash
+python3 document_generator.py \
+  --topic "Write about the benefits of remote work for small businesses" \
+  --audience "small business owners" \
+  --type "blog post" \
+  --size "500 words"
+```
+
+View help:
+```bash
+python3 document_generator.py --help
+```
+
+### Interactive Mode Prompts
 
 The application will guide you through the following steps:
 
@@ -287,6 +337,55 @@ Error saving document: Permission denied
 ```
 **Solution**: Ensure you have write permissions to the output directory.
 
+## Testing
+
+Two test scripts are provided to validate your installation:
+
+### Bash Test Script
+
+Run the comprehensive bash test suite:
+
+```bash
+./test_generator.sh
+```
+
+This script will:
+- ✓ Check for API key configuration
+- ✓ Verify Python dependencies
+- ✓ Test help command
+- ✓ Generate documents with sample files
+- ✓ Generate documents with direct text input
+- ✓ Verify example files exist
+- ✓ Display test summary
+
+### Python Test Script
+
+Run the Python-based test suite:
+
+```bash
+python3 test_generator.py
+```
+
+This script will:
+- ✓ Check environment setup
+- ✓ Verify example files
+- ✓ Test module import
+- ✓ Test file reading functionality
+- ✓ Test document generation
+- ✓ Display detailed test results
+
+**Quick Test:**
+
+To quickly test the command-line mode:
+
+```bash
+python3 document_generator.py \
+  --topic "Write a brief overview of cloud computing benefits" \
+  --audience "business executives" \
+  --type "brief" \
+  --size "1 page"
+```
+
 ## Future Enhancements
 
 - [ ] Google Drive integration for reading/writing files
@@ -305,12 +404,19 @@ Error saving document: Permission denied
 ## Project Structure
 
 ```
-DocumentGenerator/
-├── document_generator.py    # Main CLI application
-├── requirements.txt          # Python dependencies
-├── .env.example             # Environment variable template
-├── .env                     # Your API key (not in git)
-└── README.md               # This file
+PersonalDocGenerator/
+├── document_generator.py         # Main CLI application
+├── test_generator.sh            # Bash test script
+├── test_generator.py            # Python test script
+├── requirements.txt             # Python dependencies
+├── .env.example                 # Environment variable template
+├── .env                         # Your API key (not in git)
+├── .gitignore                   # Git ignore rules
+├── README.md                    # Full documentation
+├── QUICKSTART.md                # Quick start guide
+└── examples/
+    ├── sample_writing_style.txt # Example writing style
+    └── sample_topic.txt         # Example topic content
 ```
 
 ## Contributing
@@ -328,6 +434,13 @@ For issues with:
 - **This tool**: Check the troubleshooting section above
 
 ## Version History
+
+- **v1.1.0** (2025-01-07)
+  - Added command-line argument support for automation
+  - Added comprehensive test scripts (Bash and Python)
+  - Added example files for quick testing
+  - Enhanced documentation with CLI usage examples
+  - Support for both interactive and non-interactive modes
 
 - **v1.0.0** (2025-01-07)
   - Initial release

@@ -7,6 +7,7 @@ Generates draft documents based on writing style, topic, and preferences using C
 import os
 import sys
 import re
+import argparse
 from pathlib import Path
 from typing import Optional, Tuple
 from anthropic import Anthropic
@@ -290,6 +291,59 @@ Generate the complete document now:"""
             print(f"Error saving document: {e}")
             sys.exit(1)
 
+    def run_with_args(self, args: argparse.Namespace) -> None:
+        """Run with command-line arguments (non-interactive mode)."""
+        print("\n" + "="*60)
+        print("DOCUMENT GENERATOR")
+        print("Powered by Claude AI")
+        print("="*60)
+
+        # Load style content
+        if args.style:
+            if os.path.exists(args.style) or args.style.startswith("~"):
+                self.style_content = self.read_file(args.style)
+                if not self.style_content:
+                    print(f"Error: Could not read style file: {args.style}")
+                    sys.exit(1)
+            else:
+                self.style_content = args.style
+        else:
+            self.style_content = "Professional, clear, and engaging writing style."
+
+        # Load topic content
+        if os.path.exists(args.topic) or args.topic.startswith("~"):
+            self.topic_content = self.read_file(args.topic)
+            if not self.topic_content:
+                print(f"Error: Could not read topic file: {args.topic}")
+                sys.exit(1)
+        else:
+            self.topic_content = args.topic
+
+        # Set other parameters
+        self.audience = args.audience or "general professional audience"
+        self.output_type = args.type or "blog post"
+        self.size = args.size or "2-3 pages"
+        self.output_location = args.output or "."
+
+        # Display summary
+        print("\n" + "="*60)
+        print("CONFIGURATION")
+        print("="*60)
+        print(f"Output Type: {self.output_type}")
+        print(f"Audience: {self.audience}")
+        print(f"Size: {self.size}")
+        print(f"Style Length: {len(self.style_content)} characters")
+        print(f"Topic Length: {len(self.topic_content)} characters")
+        print(f"Output Location: {self.output_location}")
+
+        # Generate and save
+        content = self.generate_document()
+        self.save_document(content)
+
+        print("\n" + "="*60)
+        print("✓ COMPLETE!")
+        print("="*60)
+
     def run(self) -> None:
         """Run the interactive CLI application."""
         print("\n" + "="*60)
@@ -334,9 +388,68 @@ Generate the complete document now:"""
 
 def main():
     """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="AI-powered document generator using Claude",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  Interactive mode (default):
+    python3 document_generator.py
+
+  Command-line mode:
+    python3 document_generator.py \\
+      --topic "examples/sample_topic.txt" \\
+      --style "examples/sample_writing_style.txt" \\
+      --audience "business leaders" \\
+      --type "whitepaper" \\
+      --size "3 pages" \\
+      --output "./output"
+
+  With direct text input:
+    python3 document_generator.py \\
+      --topic "Write about AI in healthcare" \\
+      --audience "healthcare executives" \\
+      --type "blog post"
+        """
+    )
+
+    parser.add_argument(
+        "-t", "--topic",
+        help="Topic content (file path or direct text). Required for non-interactive mode."
+    )
+    parser.add_argument(
+        "-s", "--style",
+        help="Writing style (file path or direct text). Optional, uses default if not provided."
+    )
+    parser.add_argument(
+        "-a", "--audience",
+        help="Target audience (e.g., 'business leaders', 'technical professionals')"
+    )
+    parser.add_argument(
+        "--type",
+        help="Output type (e.g., 'blog post', 'whitepaper', 'article')"
+    )
+    parser.add_argument(
+        "--size",
+        help="Document size (e.g., '3 pages', '1000 words')"
+    )
+    parser.add_argument(
+        "-o", "--output",
+        help="Output location (directory path)"
+    )
+
+    args = parser.parse_args()
+
     try:
         generator = DocumentGenerator()
-        generator.run()
+
+        # Check if any arguments were provided (non-interactive mode)
+        if args.topic:
+            generator.run_with_args(args)
+        else:
+            # No arguments, run in interactive mode
+            generator.run()
+
     except KeyboardInterrupt:
         print("\n\nCancelled by user.")
         sys.exit(0)
