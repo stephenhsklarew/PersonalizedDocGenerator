@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Document Generator CLI
-Generates draft documents based on writing style, topic, and preferences using Claude AI.
+Generates draft documents based on writing style, topic, and preferences using AI models.
+Supports: Anthropic Claude, OpenAI GPT, Google Gemini
 """
 
 import os
@@ -10,31 +11,54 @@ import re
 import argparse
 from pathlib import Path
 from typing import Optional, Tuple
-from anthropic import Anthropic
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
+# Import helper modules
+try:
+    from ai_models import AIModelManager
+    from google_drive_helper import GoogleDriveHelper
+except ImportError as e:
+    print(f"Error importing helper modules: {e}")
+    print("Make sure ai_models.py and google_drive_helper.py are in the same directory.")
+    sys.exit(1)
+
 
 class DocumentGenerator:
     """Main class for document generation."""
 
-    def __init__(self):
+    def __init__(self, model_key: str = 'claude-3-5-sonnet'):
         """Initialize the document generator."""
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            print("Error: ANTHROPIC_API_KEY not found in environment variables.")
-            print("Please set your API key in .env file or environment.")
-            sys.exit(1)
-
-        self.client = Anthropic(api_key=api_key)
+        self.model_key = model_key
+        self.ai_manager = None
+        self.google_drive = None
         self.style_content = ""
         self.topic_content = ""
         self.audience = ""
         self.output_type = ""
         self.size = ""
         self.output_location = ""
+
+        # Initialize AI model
+        try:
+            self.ai_manager = AIModelManager(model_key)
+            print(f"✓ Initialized AI Model: {self.ai_manager.name}")
+        except Exception as e:
+            print(f"Error initializing AI model: {e}")
+            sys.exit(1)
+
+        # Try to initialize Google Drive (optional)
+        try:
+            self.google_drive = GoogleDriveHelper()
+            print("✓ Google Drive integration available")
+        except FileNotFoundError as e:
+            print("ℹ Google Drive integration not configured (optional)")
+            self.google_drive = None
+        except Exception as e:
+            print(f"ℹ Google Drive not available: {e}")
+            self.google_drive = None
 
     def read_file(self, path: str) -> str:
         """
@@ -46,9 +70,18 @@ class DocumentGenerator:
         Returns:
             Content of the file as string
         """
-        # Check if it's a Google Drive link
+        # Check if it's a Google Drive or Google Docs link
         if "drive.google.com" in path or "docs.google.com" in path:
-            return self.read_google_drive(path)
+            if self.google_drive:
+                # Determine if it's a Doc or Drive file
+                if "docs.google.com" in path:
+                    return self.google_drive.read_doc(path)
+                else:
+                    return self.google_drive.read_file(path)
+            else:
+                print("⚠ Google Drive integration not available.")
+                print("Please set up credentials.json to use Google Drive/Docs.")
+                return ""
         else:
             return self.read_local_file(path)
 
@@ -69,15 +102,34 @@ class DocumentGenerator:
             print(f"Error reading file {path}: {e}")
             return ""
 
-    def read_google_drive(self, url: str) -> str:
-        """
-        Read content from Google Drive.
-        Note: This requires Google Drive API setup and authentication.
-        """
-        print("⚠ Google Drive integration requires additional setup.")
-        print("For now, please download the file and provide a local path.")
-        print("Google Drive API integration can be added if needed.")
-        return ""
+    def get_model_input(self) -> str:
+        """Get AI model selection from user."""
+        print("\n" + "="*60)
+        print("AI MODEL SELECTION")
+        print("="*60)
+        print("Available AI models:")
+
+        # Display models by provider
+        models_list = AIModelManager.get_model_display_list()
+        for line in models_list:
+            print(line)
+
+        print()
+        print("Default: claude-3-5-sonnet")
+        print()
+
+        model_key = input("Enter model key (or press Enter for default): ").strip()
+
+        if not model_key:
+            return "claude-3-5-sonnet"
+
+        # Validate model key
+        if model_key not in AIModelManager.MODELS:
+            print(f"⚠ Unknown model: {model_key}")
+            print("Using default: claude-3-5-sonnet")
+            return "claude-3-5-sonnet"
+
+        return model_key
 
     def get_style_input(self) -> str:
         """Get writing style input from user."""
@@ -208,7 +260,7 @@ class DocumentGenerator:
         return location
 
     def generate_document(self) -> str:
-        """Generate the document using Claude AI."""
+        """Generate the document using selected AI model."""
         print("\n" + "="*60)
         print("GENERATING DOCUMENT...")
         print("="*60)
@@ -240,17 +292,9 @@ Please generate a complete, well-structured {self.output_type} that:
 Generate the complete document now:"""
 
         try:
-            # Call Claude API
-            print("Sending request to Claude AI...")
-            message = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=16000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
-
-            content = message.content[0].text
+            # Call AI model
+            print(f"Sending request to {self.ai_manager.name}...")
+            content = self.ai_manager.generate(prompt)
             print(f"✓ Generated {len(content)} characters")
             return content
 
@@ -265,11 +309,39 @@ Generate the complete document now:"""
         print("="*60)
 
         # Check if it's a Google Drive location
-        if "drive.google.com" in self.output_location:
-            print("⚠ Google Drive upload requires additional setup.")
-            print("Saving to current directory instead.")
-            self.output_location = "."
+        if "drive.google.com" in self.output_location or "docs.google.com" in self.output_location:
+            if self.google_drive:
+                output_type_clean = self.output_type.replace(" ", "_").lower()
+                title = f"Generated {self.output_type.title()}"
+                filename = f"generated_{output_type_clean}.md"
 
+                # Check if it's a folder URL (for uploading files) or docs URL (for creating Google Docs)
+                if "docs.google.com" in self.output_location or "/folders/" not in self.output_location:
+                    # Create as Google Doc
+                    url = self.google_drive.create_doc(title, content)
+                    if url:
+                        print(f"✓ Document saved as Google Doc!")
+                        print(f"  URL: {url}")
+                        print(f"  Size: {len(content)} characters")
+                        return
+                else:
+                    # Upload to Drive folder
+                    url = self.google_drive.upload_to_folder(self.output_location, filename, content)
+                    if url:
+                        print(f"✓ Document uploaded to Google Drive!")
+                        print(f"  URL: {url}")
+                        print(f"  Size: {len(content)} characters")
+                        return
+
+                # If Google Drive save failed, fall back to local
+                print("⚠ Google Drive save failed, saving locally instead...")
+                self.output_location = "."
+            else:
+                print("⚠ Google Drive integration not available.")
+                print("Saving to current directory instead.")
+                self.output_location = "."
+
+        # Save locally
         # Expand path and create directory if needed
         output_path = Path(self.output_location).expanduser()
         if not output_path.exists():
@@ -296,7 +368,7 @@ Generate the complete document now:"""
         """Run with command-line arguments (non-interactive mode)."""
         print("\n" + "="*60)
         print("DOCUMENT GENERATOR")
-        print("Powered by Claude AI")
+        print(f"Using: {self.ai_manager.name}")
         print("="*60)
 
         # Load style content
@@ -349,8 +421,20 @@ Generate the complete document now:"""
         """Run the interactive CLI application."""
         print("\n" + "="*60)
         print("DOCUMENT GENERATOR")
-        print("Powered by Claude AI")
+        print("Powered by Multiple AI Models")
         print("="*60)
+
+        # Get model selection (may reinitialize AI manager)
+        new_model_key = self.get_model_input()
+        if new_model_key != self.model_key:
+            print(f"\nSwitching to {AIModelManager.MODELS[new_model_key]['name']}...")
+            self.model_key = new_model_key
+            try:
+                self.ai_manager = AIModelManager(new_model_key)
+                print(f"✓ Model switched successfully")
+            except Exception as e:
+                print(f"Error switching model: {e}")
+                sys.exit(1)
 
         # Gather inputs
         self.style_content = self.get_style_input()
@@ -390,15 +474,16 @@ Generate the complete document now:"""
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="AI-powered document generator using Claude",
+        description="AI-powered document generator using multiple AI models (Claude, GPT, Gemini)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   Interactive mode (default):
     python3 document_generator.py
 
-  Command-line mode:
+  Command-line mode with Claude:
     python3 document_generator.py \\
+      --model claude-3-5-sonnet \\
       --topic "examples/sample_topic.txt" \\
       --style "examples/sample_writing_style.txt" \\
       --audience "business leaders" \\
@@ -406,14 +491,26 @@ Examples:
       --size "3 pages" \\
       --output "./output"
 
-  With direct text input:
+  Using GPT-4:
     python3 document_generator.py \\
+      --model gpt-4o \\
       --topic "Write about AI in healthcare" \\
       --audience "healthcare executives" \\
       --type "blog post"
+
+  Using Gemini:
+    python3 document_generator.py \\
+      --model gemini-1.5-pro \\
+      --topic "Remote work trends" \\
+      --type "article"
         """
     )
 
+    parser.add_argument(
+        "-m", "--model",
+        default="claude-3-5-sonnet",
+        help="AI model to use (default: claude-3-5-sonnet). Options: claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus, gpt-4, gpt-4o, gpt-3.5-turbo, gemini-pro, gemini-1.5-pro, gemini-1.5-flash"
+    )
     parser.add_argument(
         "-t", "--topic",
         help="Topic content (file path or direct text). Required for non-interactive mode."
@@ -436,13 +533,14 @@ Examples:
     )
     parser.add_argument(
         "-o", "--output",
-        help="Output location (directory path)"
+        help="Output location (directory path or Google Drive URL)"
     )
 
     args = parser.parse_args()
 
     try:
-        generator = DocumentGenerator()
+        # Initialize with selected model
+        generator = DocumentGenerator(model_key=args.model)
 
         # Check if any arguments were provided (non-interactive mode)
         if args.topic:
