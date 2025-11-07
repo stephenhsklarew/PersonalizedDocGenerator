@@ -415,17 +415,42 @@ Generate the complete document now:"""
             print(f"Error generating document: {e}")
             sys.exit(1)
 
+    def extract_title_from_content(self, content: str) -> str:
+        """Extract title from markdown content (first # heading).
+
+        Returns cleaned title suitable for filename, or default if no title found.
+        """
+        import re
+
+        lines = content.split('\n')
+        for line in lines:
+            # Look for markdown heading
+            match = re.match(r'^#\s+(.+)$', line.strip())
+            if match:
+                title = match.group(1).strip()
+                # Clean title for filename (remove special characters)
+                title = re.sub(r'[^\w\s-]', '', title)  # Remove special chars except spaces and hyphens
+                title = re.sub(r'\s+', ' ', title)  # Normalize spaces
+                title = title.strip()
+                return title[:80]  # Limit length to 80 chars
+
+        # Fallback if no title found
+        return f"Generated {self.output_type.title()}"
+
     def save_document(self, content: str) -> None:
         """Save the generated document to the specified location."""
         print("\n" + "="*60)
         print("SAVING DOCUMENT...")
         print("="*60)
 
+        # Extract title from content for filename
+        doc_title = self.extract_title_from_content(content)
+
         # Check if it's a Google Drive location
         if "drive.google.com" in self.output_location or "docs.google.com" in self.output_location:
             if self.google_drive:
-                output_type_clean = self.output_type.replace(" ", "_").lower()
-                title = f"Generated {self.output_type.title()}"
+                # Format: [Title]-Generated
+                title = f"{doc_title}-Generated"
 
                 # Extract folder ID if it's a folder URL
                 folder_id = None
@@ -439,6 +464,7 @@ Generate the complete document now:"""
                         print(f"✓ Document saved as Google Doc in folder!")
                     else:
                         print(f"✓ Document saved as Google Doc!")
+                    print(f"  Title: {title}")
                     print(f"  URL: {url}")
                     print(f"  Size: {len(content)} characters")
                     return
@@ -457,9 +483,8 @@ Generate the complete document now:"""
         if not output_path.exists():
             output_path.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename based on output type
-        output_type_clean = self.output_type.replace(" ", "_").lower()
-        filename = f"generated_{output_type_clean}.md"
+        # Format: [Title]-Generated.md
+        filename = f"{doc_title}-Generated.md"
         full_path = output_path / filename
 
         # Save the file
@@ -468,6 +493,7 @@ Generate the complete document now:"""
                 f.write(content)
 
             print(f"✓ Document saved successfully!")
+            print(f"  Filename: {filename}")
             print(f"  Location: {full_path.absolute()}")
             print(f"  Size: {len(content)} characters")
         except Exception as e:
