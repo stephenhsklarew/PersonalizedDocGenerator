@@ -208,52 +208,77 @@ class GoogleDriveHelper:
     def _build_formatted_requests(self, content: str) -> list:
         """Build Google Docs API requests with formatting applied
 
-        Analyzes content structure and applies appropriate styles:
-        - First line as Title (if short)
-        - Short lines (< 60 chars) as Headings
-        - Regular paragraphs as Normal Text
+        Strips markdown syntax and applies appropriate Google Docs styles:
+        - # Header -> TITLE
+        - ## Header -> HEADING_1
+        - ### Header -> HEADING_2
+        - #### Header -> HEADING_3
+        - **bold** and *italic* -> removed (plain text)
+        - Regular paragraphs -> Normal Text
         """
+        import re
+
         requests = []
         lines = content.split('\n')
 
-        # Track current position in document
-        current_index = 1
+        # First pass: strip markdown and track formatting
+        cleaned_lines = []
+        line_styles = []
+
+        for i, line in enumerate(lines):
+            original_line = line
+            stripped = line.strip()
+
+            # Detect markdown headers
+            heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+            if heading_match:
+                level = len(heading_match.group(1))
+                text = heading_match.group(2).strip()
+                cleaned_lines.append(text)
+
+                # Map markdown levels to Google Docs styles
+                if i == 0 or level == 1:
+                    line_styles.append('TITLE')
+                elif level == 2:
+                    line_styles.append('HEADING_1')
+                elif level == 3:
+                    line_styles.append('HEADING_2')
+                else:
+                    line_styles.append('HEADING_3')
+            else:
+                # Remove markdown bold/italic
+                text = re.sub(r'\*\*(.+?)\*\*', r'\1', stripped)  # **bold**
+                text = re.sub(r'\*(.+?)\*', r'\1', text)  # *italic*
+                text = re.sub(r'__(.+?)__', r'\1', text)  # __bold__
+                text = re.sub(r'_(.+?)_', r'\1', text)  # _italic_
+
+                cleaned_lines.append(text)
+                line_styles.append('NORMAL')
+
+        # Join cleaned content
+        cleaned_content = '\n'.join(cleaned_lines)
 
         # Insert all text first
         requests.append({
             'insertText': {
                 'location': {'index': 1},
-                'text': content
+                'text': cleaned_content
             }
         })
 
-        # Now apply formatting (in reverse order to maintain indices)
-        for i, line in enumerate(lines):
-            line_stripped = line.strip()
-            line_length = len(line_stripped)
+        # Now apply formatting based on detected styles
+        current_index = 1
 
-            # Skip empty lines
-            if not line_stripped:
-                current_index += len(line) + 1  # +1 for newline
+        for i, (line, style) in enumerate(zip(cleaned_lines, line_styles)):
+            if not line:  # Skip empty lines
+                current_index += 1  # Just the newline
                 continue
 
-            # Calculate start and end indices for this line
             start_index = current_index
             end_index = current_index + len(line)
 
-            # Determine if this should be a heading
-            is_first_line = (i == 0)
-            is_heading = (
-                line_length < 80 and
-                line_length > 0 and
-                not line_stripped.endswith('.') and
-                not line_stripped.endswith(',') and
-                (line_stripped[0].isupper() if line_stripped else False)
-            )
-
-            # Apply appropriate style
-            if is_first_line and line_length < 100:
-                # First line as Title
+            # Apply style based on what was detected
+            if style == 'TITLE':
                 requests.append({
                     'updateParagraphStyle': {
                         'range': {
@@ -268,8 +293,7 @@ class GoogleDriveHelper:
                         'fields': 'namedStyleType,spaceAbove,spaceBelow'
                     }
                 })
-            elif is_heading and line_length < 60:
-                # Short lines as Heading 1
+            elif style == 'HEADING_1':
                 requests.append({
                     'updateParagraphStyle': {
                         'range': {
@@ -284,8 +308,7 @@ class GoogleDriveHelper:
                         'fields': 'namedStyleType,spaceAbove,spaceBelow'
                     }
                 })
-            elif is_heading and line_length < 80:
-                # Medium short lines as Heading 2
+            elif style == 'HEADING_2':
                 requests.append({
                     'updateParagraphStyle': {
                         'range': {
@@ -300,9 +323,24 @@ class GoogleDriveHelper:
                         'fields': 'namedStyleType,spaceAbove,spaceBelow'
                     }
                 })
+            elif style == 'HEADING_3':
+                requests.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': start_index,
+                            'endIndex': end_index
+                        },
+                        'paragraphStyle': {
+                            'namedStyleType': 'HEADING_3',
+                            'spaceAbove': {'magnitude': 8, 'unit': 'PT'},
+                            'spaceBelow': {'magnitude': 4, 'unit': 'PT'}
+                        },
+                        'fields': 'namedStyleType,spaceAbove,spaceBelow'
+                    }
+                })
 
-            # Move to next line
-            current_index = end_index + 1  # +1 for newline
+            # Move to next line (length of line + newline)
+            current_index = end_index + 1
 
         return requests
 
