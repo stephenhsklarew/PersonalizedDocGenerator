@@ -40,6 +40,7 @@ class DocumentGenerator:
         self.output_type = ""
         self.size = ""
         self.output_location = ""
+        self.customer_story_content = ""  # Optional customer story/case study
 
         # Initialize AI model
         try:
@@ -320,6 +321,47 @@ class DocumentGenerator:
 
         return location
 
+    def get_customer_story_input(self) -> str:
+        """Get optional customer story/case study from user."""
+        print("\n" + "="*60)
+        print("CUSTOMER STORY / CASE STUDY (Optional)")
+        print("="*60)
+        print("Provide a customer story or case study to include in the document:")
+        print("  • File path: examples/customer_story.md")
+        print("  • Google Drive link: https://docs.google.com/document/d/...")
+        print("  • Press Enter to skip (AI will create a fictional example)")
+        print()
+
+        choice = input("Enter file path, link, or press Enter to skip: ").strip()
+
+        if not choice:
+            print("No customer story provided. AI will create a fictional example.")
+            return ""
+
+        # Check if it's a path or URL
+        if choice.startswith("http") or choice.startswith("~") or choice.startswith("/") or os.path.exists(choice):
+            content = self.read_file(choice)
+            if content:
+                print(f"✓ Customer story loaded ({len(content)} characters)")
+                return content
+            else:
+                print("Failed to read file. Skipping customer story.")
+                return ""
+        else:
+            # It's direct text input
+            print(f"✓ Customer story loaded ({len(choice)} characters)")
+            return choice
+
+    def _get_customer_story_instructions(self) -> str:
+        """Get customer story instructions based on whether one was provided."""
+        if self.customer_story_content:
+            return f"""USE THIS CUSTOMER STORY/CASE STUDY:
+{self.customer_story_content}
+
+IMPORTANT: Use the customer story/case study provided above when including examples or case studies in your document. Do not create fictional companies or examples - use the real information provided."""
+        else:
+            return """If appropriate for the document type, you may create a realistic but fictional customer story or case study to illustrate key points. Make it specific and credible, not generic."""
+
     def generate_document(self) -> str:
         """Generate the document using selected AI model.
 
@@ -364,6 +406,9 @@ TARGET AUDIENCE:
 
 TOPIC, INSIGHTS & QUOTES:
 {self.topic_content}
+
+CUSTOMER STORY / CASE STUDY:
+{self._get_customer_story_instructions()}
 
 DOCUMENT REQUIREMENTS:
 - Type: {self.output_type}
@@ -534,6 +579,18 @@ Generate the complete document now:"""
         self.size = args.size or "2-3 pages"
         self.output_location = args.output or "."
 
+        # Load customer story if provided
+        if hasattr(args, 'customer_story') and args.customer_story:
+            if os.path.exists(args.customer_story) or args.customer_story.startswith("~") or args.customer_story.startswith("http"):
+                self.customer_story_content = self.read_file(args.customer_story)
+                if not self.customer_story_content:
+                    print(f"Warning: Could not read customer story file: {args.customer_story}")
+                    print("AI will create a fictional example instead.")
+            else:
+                self.customer_story_content = args.customer_story
+        else:
+            self.customer_story_content = ""
+
         # Display summary
         print("\n" + "="*60)
         print("CONFIGURATION")
@@ -544,6 +601,10 @@ Generate the complete document now:"""
         print(f"Size: {self.size}")
         print(f"Style Length: {len(self.style_content)} characters")
         print(f"Topic Length: {len(self.topic_content)} characters")
+        if self.customer_story_content:
+            print(f"Customer Story: {len(self.customer_story_content)} characters")
+        else:
+            print(f"Customer Story: None (AI will create fictional example)")
         print(f"Output Location: {self.output_location}")
 
         # Generate and save (always uses markdown, converted automatically for Google Docs)
@@ -580,6 +641,7 @@ Generate the complete document now:"""
         self.output_type = self.get_output_type_input()
         self.size = self.get_size_input()
         self.output_location = self.get_output_location_input()
+        self.customer_story_content = self.get_customer_story_input()
 
         # Display summary
         print("\n" + "="*60)
@@ -591,6 +653,10 @@ Generate the complete document now:"""
         print(f"Size: {self.size}")
         print(f"Style Length: {len(self.style_content)} characters")
         print(f"Topic Length: {len(self.topic_content)} characters")
+        if self.customer_story_content:
+            print(f"Customer Story: {len(self.customer_story_content)} characters")
+        else:
+            print(f"Customer Story: None (AI will create fictional example)")
         print(f"Output Location: {self.output_location}")
         print()
 
@@ -668,6 +734,10 @@ Examples:
     parser.add_argument(
         "--size",
         help="Document size (e.g., '3 pages', '1000 words')"
+    )
+    parser.add_argument(
+        "-c", "--customer-story",
+        help="Customer story/case study (file path or Google Docs URL). Optional - AI will create fictional example if not provided."
     )
     parser.add_argument(
         "-o", "--output",
