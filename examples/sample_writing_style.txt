@@ -1,0 +1,32 @@
+Writing Style and Voice Guidelines
+===================================
+
+Tone:
+- Conversational yet authoritative
+- Professional but approachable
+- Data-driven and analytical
+
+Structure:
+- Short paragraphs (2-4 sentences max)
+- Use bullet points for clarity
+- Strong opening hooks
+- Clear calls-to-action
+
+Language:
+- Active voice preferred
+- Concrete examples over abstract concepts
+- Minimal jargon unless writing for technical audiences
+- Use second person ("you") to engage readers
+
+Style Elements:
+- Start with a compelling question or statistic
+- Include real-world examples
+- Use transition phrases for flow
+- End sections with key takeaways
+- Conclude with actionable next steps
+
+Avoid:
+- Long, complex sentences
+- Passive voice
+- Unnecessary buzzwords
+- Overly formal language
