@@ -151,7 +151,7 @@ class GoogleDriveHelper:
             return ""
 
     def create_doc(self, title: str, content: str, folder_id: Optional[str] = None) -> Optional[str]:
-        """Create a new Google Doc with content
+        """Create a new Google Doc with content and formatting
 
         Args:
             title: Title of the document
@@ -166,18 +166,15 @@ class GoogleDriveHelper:
 
             doc_id = document.get('documentId')
 
-            # Insert content
-            requests = [{
-                'insertText': {
-                    'location': {'index': 1},
-                    'text': content
-                }
-            }]
+            # Parse content and build formatted requests
+            requests = self._build_formatted_requests(content)
 
-            self.docs_service.documents().batchUpdate(
-                documentId=doc_id,
-                body={'requests': requests}
-            ).execute()
+            # Apply all formatting in one batch
+            if requests:
+                self.docs_service.documents().batchUpdate(
+                    documentId=doc_id,
+                    body={'requests': requests}
+                ).execute()
 
             # If folder_id specified, move the doc to that folder
             if folder_id:
@@ -207,6 +204,107 @@ class GoogleDriveHelper:
         except Exception as e:
             print(f"Error: {e}")
             return None
+
+    def _build_formatted_requests(self, content: str) -> list:
+        """Build Google Docs API requests with formatting applied
+
+        Analyzes content structure and applies appropriate styles:
+        - First line as Title (if short)
+        - Short lines (< 60 chars) as Headings
+        - Regular paragraphs as Normal Text
+        """
+        requests = []
+        lines = content.split('\n')
+
+        # Track current position in document
+        current_index = 1
+
+        # Insert all text first
+        requests.append({
+            'insertText': {
+                'location': {'index': 1},
+                'text': content
+            }
+        })
+
+        # Now apply formatting (in reverse order to maintain indices)
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            line_length = len(line_stripped)
+
+            # Skip empty lines
+            if not line_stripped:
+                current_index += len(line) + 1  # +1 for newline
+                continue
+
+            # Calculate start and end indices for this line
+            start_index = current_index
+            end_index = current_index + len(line)
+
+            # Determine if this should be a heading
+            is_first_line = (i == 0)
+            is_heading = (
+                line_length < 80 and
+                line_length > 0 and
+                not line_stripped.endswith('.') and
+                not line_stripped.endswith(',') and
+                (line_stripped[0].isupper() if line_stripped else False)
+            )
+
+            # Apply appropriate style
+            if is_first_line and line_length < 100:
+                # First line as Title
+                requests.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': start_index,
+                            'endIndex': end_index
+                        },
+                        'paragraphStyle': {
+                            'namedStyleType': 'TITLE',
+                            'spaceAbove': {'magnitude': 0, 'unit': 'PT'},
+                            'spaceBelow': {'magnitude': 12, 'unit': 'PT'}
+                        },
+                        'fields': 'namedStyleType,spaceAbove,spaceBelow'
+                    }
+                })
+            elif is_heading and line_length < 60:
+                # Short lines as Heading 1
+                requests.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': start_index,
+                            'endIndex': end_index
+                        },
+                        'paragraphStyle': {
+                            'namedStyleType': 'HEADING_1',
+                            'spaceAbove': {'magnitude': 12, 'unit': 'PT'},
+                            'spaceBelow': {'magnitude': 6, 'unit': 'PT'}
+                        },
+                        'fields': 'namedStyleType,spaceAbove,spaceBelow'
+                    }
+                })
+            elif is_heading and line_length < 80:
+                # Medium short lines as Heading 2
+                requests.append({
+                    'updateParagraphStyle': {
+                        'range': {
+                            'startIndex': start_index,
+                            'endIndex': end_index
+                        },
+                        'paragraphStyle': {
+                            'namedStyleType': 'HEADING_2',
+                            'spaceAbove': {'magnitude': 10, 'unit': 'PT'},
+                            'spaceBelow': {'magnitude': 4, 'unit': 'PT'}
+                        },
+                        'fields': 'namedStyleType,spaceAbove,spaceBelow'
+                    }
+                })
+
+            # Move to next line
+            current_index = end_index + 1  # +1 for newline
+
+        return requests
 
     def upload_to_folder(self, folder_url: str, filename: str, content: str) -> Optional[str]:
         """Upload a file to a Google Drive folder"""
