@@ -140,29 +140,53 @@ class DocumentGenerator:
         print("\n" + "="*60)
         print("AI MODEL SELECTION")
         print("="*60)
-        print("Available AI models:")
+        print("Available AI models:\n")
 
-        # Display models by provider
-        models_list = AIModelManager.get_model_display_list()
-        for line in models_list:
-            print(line)
+        # Build numbered list
+        model_keys = list(AIModelManager.MODELS.keys())
+        by_provider = AIModelManager.list_models_by_provider()
 
+        index = 1
+        key_to_number = {}
+
+        for provider in ['anthropic', 'openai', 'gemini']:
+            if provider in by_provider:
+                provider_name = {
+                    'anthropic': 'Anthropic Claude',
+                    'openai': 'OpenAI GPT',
+                    'gemini': 'Google Gemini'
+                }[provider]
+
+                print(f"{provider_name}:")
+                for model in by_provider[provider]:
+                    print(f"  {index}. {model['name']}")
+                    key_to_number[str(index)] = model['key']
+                    index += 1
+                print()
+
+        print(f"Default: 1 (Claude 3.5 Sonnet)")
         print()
-        print("Default: claude-3-5-sonnet")
-        print()
 
-        model_key = input("Enter model key (or press Enter for default): ").strip()
+        choice = input("Enter number or model key (or press Enter for default): ").strip()
 
-        if not model_key:
+        if not choice:
             return "claude-3-5-sonnet"
 
-        # Validate model key
-        if model_key not in AIModelManager.MODELS:
-            print(f"⚠ Unknown model: {model_key}")
-            print("Using default: claude-3-5-sonnet")
-            return "claude-3-5-sonnet"
+        # Check if it's a number
+        if choice in key_to_number:
+            selected_key = key_to_number[choice]
+            print(f"✓ Selected: {AIModelManager.MODELS[selected_key]['name']}")
+            return selected_key
 
-        return model_key
+        # Check if it's a direct key
+        if choice in AIModelManager.MODELS:
+            print(f"✓ Selected: {AIModelManager.MODELS[choice]['name']}")
+            return choice
+
+        # Invalid input
+        print(f"\n⚠ Invalid selection: '{choice}'")
+        print("Using default: Claude 3.5 Sonnet")
+        return "claude-3-5-sonnet"
 
     def get_style_input(self) -> str:
         """Get writing style input from user."""
