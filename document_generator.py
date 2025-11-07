@@ -86,18 +86,51 @@ class DocumentGenerator:
             return self.read_local_file(path)
 
     def read_local_file(self, path: str) -> str:
-        """Read content from a local file."""
+        """Read content from a local file (supports .txt, .md, .docx, .pdf)."""
         try:
             file_path = Path(path).expanduser()
             if not file_path.exists():
                 print(f"Error: File not found: {path}")
                 return ""
 
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            # Get file extension
+            ext = file_path.suffix.lower()
 
-            print(f"✓ Successfully read {len(content)} characters from {file_path.name}")
-            return content
+            # Handle Word documents
+            if ext in ['.docx', '.doc']:
+                try:
+                    from docx import Document
+                    doc = Document(file_path)
+                    content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                    print(f"✓ Successfully read {len(content)} characters from Word document {file_path.name}")
+                    return content
+                except Exception as e:
+                    print(f"Error reading Word document: {e}")
+                    print("Make sure python-docx is installed: pip install python-docx")
+                    return ""
+
+            # Handle PDF files
+            elif ext == '.pdf':
+                try:
+                    from PyPDF2 import PdfReader
+                    reader = PdfReader(file_path)
+                    content = ''
+                    for page in reader.pages:
+                        content += page.extract_text() + '\n'
+                    print(f"✓ Successfully read {len(content)} characters from PDF {file_path.name}")
+                    return content
+                except Exception as e:
+                    print(f"Error reading PDF: {e}")
+                    print("Make sure PyPDF2 is installed: pip install PyPDF2")
+                    return ""
+
+            # Handle text files (default)
+            else:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                print(f"✓ Successfully read {len(content)} characters from {file_path.name}")
+                return content
+
         except Exception as e:
             print(f"Error reading file {path}: {e}")
             return ""
