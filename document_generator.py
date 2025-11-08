@@ -697,9 +697,8 @@ Examples:
   Interactive mode (default):
     python3 document_generator.py
 
-  Command-line mode with Claude:
+  Test mode (default - uses free Gemini 1.5 Flash):
     python3 document_generator.py \\
-      --model claude-3-5-sonnet \\
       --topic "examples/sample_topic.txt" \\
       --style "examples/sample_writing_style.txt" \\
       --audience "business leaders" \\
@@ -707,16 +706,16 @@ Examples:
       --size "3 pages" \\
       --output "./output"
 
-  Using GPT-4:
+  Production mode (uses GPT-4o):
     python3 document_generator.py \\
-      --model gpt-4o \\
+      --mode production \\
       --topic "Write about AI in healthcare" \\
       --audience "healthcare executives" \\
       --type "blog post"
 
-  Using Gemini:
+  Override mode with specific model:
     python3 document_generator.py \\
-      --model gemini-1.5-pro \\
+      --model claude-3-5-sonnet \\
       --topic "Remote work trends" \\
       --type "article"
         """
@@ -755,12 +754,34 @@ Examples:
         "-o", "--output",
         help="Output location (directory path or Google Drive URL)"
     )
+    parser.add_argument(
+        "--mode",
+        choices=["test", "production"],
+        default="test",
+        help="Operation mode: 'test' uses Gemini 1.5 Flash (free), 'production' uses GPT-4o (default: test)"
+    )
 
     args = parser.parse_args()
 
+    # Override model based on mode if not explicitly set
+    if args.mode == "test":
+        model_to_use = "gemini-1.5-flash"
+    else:  # production
+        model_to_use = "gpt-4o"
+
+    # If user explicitly specified --model, that takes precedence
+    if args.model != "claude-3-5-sonnet":  # Not the default
+        model_to_use = args.model
+
     try:
         # Initialize with selected model
-        generator = DocumentGenerator(model_key=args.model)
+        generator = DocumentGenerator(model_key=model_to_use)
+
+        # Print mode information
+        mode_label = "TEST MODE" if args.mode == "test" else "PRODUCTION MODE"
+        print(f"\n{'='*60}")
+        print(f"{mode_label}")
+        print(f"{'='*60}")
 
         # Check if any arguments were provided (non-interactive mode)
         if args.topic:
